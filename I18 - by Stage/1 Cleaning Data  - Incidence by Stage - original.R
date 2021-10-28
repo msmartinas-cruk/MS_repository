@@ -29,8 +29,8 @@ library(naniar)
 national_data <- 
   read_excel("G:\\Cancer Information\\Cancer Stats\\Alteryx\\Indicators\\Incidence\\GN0001-England\\SN0102-2018\\4_Working\\SN0102_ODR 1819_060A2_Incidence14to18_byStage.xlsx")
 
-ca_data <- 
-  read_excel("G:\\Cancer Information\\Cancer Stats\\Alteryx\\Indicators\\Incidence\\GN0001-England\\SN0102-2018\\4_Working\\SN0102_ODR 1819_060A2_Incidence14to18_byStage_byCanAlliance.xlsx")
+#ca_data <- 
+#  read_excel("G:\\Cancer Information\\Cancer Stats\\Alteryx\\Indicators\\Incidence\\GN0001-England\\SN0102-2018\\4_Working\\SN0102_ODR 1819_060A2_Incidence14to18_byStage_byCanAlliance.xlsx")
 
 ######################## NATIONAL DATA #################################
 
@@ -61,7 +61,7 @@ clean_national <- national_data %>%
 clean_national$stage <- recode(clean_national$stage, 
                          "?" = "Unknown", 
                          "6" = "Unknown", 
-                         "I" = "Unknown", 
+                         "I" = "1", 
                          "5" = "Unknown", 
                          "U" = "Unknown", 
                          "X" = "Unknown", 
@@ -103,12 +103,12 @@ clean_national %>% group_by(SITE_ICD10_O2GROUP) %>% summarise(count = n())
 
 icd_10_raw <- read_excel("G:\\Cancer Information\\Cancer Stats\\Alteryx\\Dimensions\\Dim_CancerSite.xlsx") 
 
-icd_10_l5 <- icd_10_raw %>%
+icd_10_l3 <- icd_10_raw %>%
   select(CancerSiteKey, CancerSiteLevel3Desc, CancerSiteLevel3Code) 
 
-icd_10_l5 <- icd_10_l5 %>% distinct() %>% rename("SITE_ICD10_O2GROUP" = "CancerSiteKey")
+icd_10_l3 <- icd_10_l3 %>% distinct() %>% rename("SITE_ICD10_O2GROUP" = "CancerSiteKey")
 
-clean_national <- left_join(clean_national, icd_10_l5, by = "SITE_ICD10_O2GROUP")
+clean_national <- left_join(clean_national, icd_10_l3, by = "SITE_ICD10_O2GROUP")
 
 table(clean_national$CancerSiteLevel3Desc)
 
@@ -123,20 +123,43 @@ IncidenceByStage_national <- clean_national %>%
 #Check there are no missing values
 miss_var_summary(IncidenceByStage_national)
 
-# Grouping Level 3 sites 
-IncidenceByStage_national <- IncidenceByStage_national %>% 
-  group_by(DIAGNOSISYEAR, CancerSiteLevel3Code, CancerSiteLevel3Desc, FIVEYEARAGEBAND, STAGE, SEX) %>% 
-  filter(STAGE != "0") %>%
+# Creating datatsets with a variety of groupings
+
+## creating a list of cancer sites to be excluded due to lack of staging data
+sites_excluded <- c("C26", "C39", "C46", "C57", "C70-C72, C75.1-C75.3", "C75.0, C75.4-C75.9", 
+                    "C76", "C77-C80", "C88", "C96", "D00-D04,D07-D09", "D05", "D10-D31, D34, D35.0-D35.1, D35.5-D35.9,D36", 
+                    "D32-D33, D35.2-D35.4, D42-D43, D44.3-D44.5", 
+                    "D37-D41, D44.0-D44.2, D44.6-D44.9, D45-D48", "C44", "C91-C95")
+
+`%notin%` <- Negate(`%in%`)
+
+national_all_byAgeStage <- IncidenceByStage_national %>% 
+  group_by(FIVEYEARAGEBAND, STAGE) %>% 
+  filter(STAGE != "0", STAGE != "A", STAGE != "B", STAGE != "C") %>%
+  filter(CancerSiteLevel3Code %notin% sites_excluded) %>% 
   summarise(Incidence_sum = sum(INCIDENCE))
 
+write.csv(national_all_byAgeStage, "G:\\Cancer Information\\Cancer Stats\\Alteryx\\Indicators\\Incidence\\GN0001-England\\SN0102-2018\\4_Working\\national_allSite_byAgeStage_excerptMS.csv")
 
-write.csv(IncidenceByStage_national, "C:\\Users\\slapko01\\WORKING FILES\\Projects\\I18 - stage\\Incidence_by_stage_national.csv")
+
+national_all_byAgeStageYear <- IncidenceByStage_national %>% 
+  group_by(DIAGNOSISYEAR, FIVEYEARAGEBAND, STAGE) %>% 
+  filter(STAGE != "0", STAGE != "A", STAGE != "B", STAGE != "C") %>%
+  filter(CancerSiteLevel3Code %notin% sites_excluded) %>% 
+  summarise(Incidence_sum = sum(INCIDENCE)) %>%
+  spread(FIVEYEARAGEBAND, Incidence_sum) %>%
+  rowwise() %>% 
+  mutate(`0-9` = sum(c(`0-4`, `5-9`))) %>%
+  select(DIAGNOSISYEAR, STAGE, `0-9`, `10-14`:`45-49`, `50-54`:`90+`)
+
+
+write.csv(national_all_byAgeStage, "G:\\Cancer Information\\Cancer Stats\\Alteryx\\Indicators\\Incidence\\GN0001-England\\SN0102-2018\\4_Working\\national_allSite_byAgeStageYear_excerptMS.csv")
 
 ######################## CANCER ALLIANCE DATA #################################
 
 # Will need to remove Stage 0 data and possibly A/B/C - can this be categorised as something else?
 
-#-------------- 2. Clean up of STAGE_BEST variable ---------------
+#-------------- 2. Clean up of STAGE_BEST variable ---------------#
 
 # Staging information as per NCRAS  ODR data dictionary:
 #stage_0: "0","0A","0B","0C","0IS")
@@ -180,7 +203,7 @@ clean_ca %>% group_by(stage) %>% summarise(count = n())
 # - How granular the stage data?
 
 
-#-------------- 3. Clean up of SEX variable ---------------
+#-------------- 3. Clean up of SEX variable ---------------#
 
 # Sex of the patient when the tumour was diagnosed.
 # 0=Not known, 1=Male, 2=Female, 9=Not specified.
@@ -194,7 +217,7 @@ clean_ca$sex <- recode(clean_ca$SEX,
 clean_ca %>% group_by(sex) %>% summarise(count = n())
 
 
-#-------------- 3. Clean up of SITE_ICD10_O2GROUP variable ---------------
+#-------------- 3. Clean up of SITE_ICD10_O2GROUP variable ---------------#
 
 # Data includes Level 5 sites (e.g. Bowel cancer C18-C20 split into bowel, rectosigmoid junction and rectum)
 # Picked CancerSiteKey from the ICD dimensions dataset with the most detailed code and Level 3 description, then matched the appropriate L3 code 
@@ -203,17 +226,17 @@ clean_ca %>% group_by(SITE_ICD10_O2GROUP) %>% summarise(count = n())
 
 icd_10_raw <- read_excel("G:\\Cancer Information\\Cancer Stats\\Alteryx\\Dimensions\\Dim_CancerSite.xlsx") 
 
-icd_10_l5 <- icd_10_raw %>%
+icd_10_l3 <- icd_10_raw %>%
   select(CancerSiteKey, CancerSiteLevel3Desc, CancerSiteLevel3Code) 
 
-icd_10_l5 <- icd_10_l5 %>% distinct() %>% rename("SITE_ICD10_O2GROUP" = "CancerSiteKey")
+icd_10_l3 <- icd_10_l3 %>% distinct() %>% rename("SITE_ICD10_O2GROUP" = "CancerSiteKey")
 
-clean_ca <- left_join(clean_ca, icd_10_l5, by = "SITE_ICD10_O2GROUP")
+clean_ca <- left_join(clean_ca, icd_10_l3, by = "SITE_ICD10_O2GROUP")
 
 table(clean_ca$CancerSiteLevel3Desc)
 
 
-#-------------- 4A. Creating final dataset & checking for granularity ---------------
+#-------------- 4A. Creating final dataset & checking for granularity ---------------#
 
 IncidenceByStage_ca <- clean_ca %>% 
   select(DIAGNOSISYEAR, CANALLIANCE_2019_NAME, CancerSiteLevel3Code, CancerSiteLevel3Desc, FIVEYEARAGEBAND, stage, sex, INCIDENCE) %>%

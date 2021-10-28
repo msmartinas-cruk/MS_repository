@@ -1,0 +1,14 @@
+From the RCRD folder:
+1) Open rcrdDataPrep script and change the pathway to upload the lastest raw data as rcrd_data (e.g. October) and old data as raw_old (e.g. September)
+2) Set your working directory, run the script which should output two files in the directory: 
+   - rcrdCompletnessData.csv for the Completeness analysis tool
+   - rcrdRawDate.csv for the RCRD spreadsheet
+3) Open a template / copy of latest Completeness tool and rcrdCompletenessData (make sure to rename the tool with latest date of the data)
+4) Overwrite Raw data with data from rcrdCompletenessData
+5) Click within Pivot table > Analyze > Refresh > Refresh All
+6) In Tablw 2, check which months have a discrepancy of less than 5% for each of the measures - note it down
+
+Open rcrdRawData and Stage & Route - RCRD
+7) Copy and paste as value into the raw tab
+8) CLick into any pivot table > Analyze > Refresh > Refresh All
+9) You just need to adjust th eperiods for period calcs
